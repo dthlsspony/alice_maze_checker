@@ -119,5 +119,70 @@ func _initialize() -> void:
 	check("loop: deterministic", str(accepted) == str(accepted2))
 	check("loop: same try count", tries == t2, {"a": tries, "b": t2})
 
+	# --- doors: name rule + reachability ---
+	var droom: Array = [
+		[1, 1, 1, 1, 1, 1, 1],
+		[1, 0, 0, 0, 0, 0, 1],
+		[1, 0, 1, 1, 1, 0, 1],
+		[1, 0, 0, 0, 0, 0, 1],
+		[1, 1, 1, 1, 1, 1, 1],
+	]
+	var closed_door: Dictionary = Rt.check_doors(droom, [{"name": "Door_A", "cell": Vector2i(3, 2), "state": "closed"}], {"start": Vector2i(1, 1)})
+	check("door: closed door reachable from spawn", closed_door.doors[0].reachable == true, closed_door.doors)
+	check("door: closed door not needing clearing", closed_door.doors[0].needsClearing == false, closed_door.doors)
+	check("door: clean floor passes", closed_door.pass == true, closed_door.reasons)
+
+	var open_door: Dictionary = Rt.check_doors(droom, [{"name": "Door_A", "cell": Vector2i(3, 2), "state": "open"}], {"start": Vector2i(1, 1)})
+	check("door: open door is passable", open_door.doors[0].reachable == true and open_door.doors[0].needsClearing == false, open_door.doors)
+
+	# a door whose only approach is through a destructible obstacle
+	var block_room: Array = [
+		[1, 1, 1, 1, 1, 1, 1],
+		[1, 0, 0, 0, 0, 0, 1],
+		[1, 1, 1, 1, 1, 1, 1],
+	]
+	var br: Dictionary = Rt.check_doors(block_room, [{"name": "Door_B", "cell": Vector2i(4, 1), "state": "closed"}], {"start": Vector2i(1, 1), "obstacles": [Vector2i(2, 1)]})
+	check("door: needs clearing detected", br.doors[0].needsClearing == true, br.doors)
+	check("door: needs clearing warns, not fails, by default", br.pass == true and br.warnings.size() == 1, br)
+	var brs: Dictionary = Rt.check_doors(block_room, [{"name": "Door_B", "cell": Vector2i(4, 1), "state": "closed"}], {"start": Vector2i(1, 1), "obstacles": [Vector2i(2, 1)], "strictClearPath": true})
+	check("door: strictClearPath flags it", brs.pass == false, brs.reasons)
+
+	# a door sealed behind a permanent wall can never be used
+	var sealed_room: Array = [
+		[1, 1, 1, 1, 1, 1, 1],
+		[1, 0, 1, 0, 1, 1, 1],
+		[1, 1, 1, 1, 1, 1, 1],
+	]
+	var wr: Dictionary = Rt.check_doors(sealed_room, [{"name": "Door_C", "cell": Vector2i(3, 1), "state": "closed"}], {"start": Vector2i(1, 1)})
+	check("door: walled off detected", wr.doors[0].walledOff == true, wr.doors)
+	check("door: walled off fails", wr.pass == false and wr.reasons.size() == 1, wr.reasons)
+
+	# locked doors are reported, not treated as a break by themselves
+	var lr: Dictionary = Rt.check_doors(droom, [{"name": "Door_A", "cell": Vector2i(3, 2), "state": "locked"}], {"start": Vector2i(1, 1)})
+	check("door: locked reported", lr.doors[0].note == "locked", lr.doors)
+	check("door: locked does not fail", lr.pass == true, lr.reasons)
+
+	# name rule + state reading
+	var named: Array = Rt.doors_from_named([
+		{"name": "Door_A", "cell": Vector2i(3, 2), "state": "locked"},
+		{"name": "wall_1", "cell": Vector2i(0, 0)},
+		{"name": "big_DOOR", "cell": Vector2i(1, 1)},
+		{"name": "crate", "cell": Vector2i(2, 1), "locked": true},
+		{"name": "Gate_North", "cell": Vector2i(5, 1)},
+	])
+	check("door: naming helper keeps doors and gates", named.size() == 3, named)
+	check("door: locked state read", named[0].state == "locked", named[0])
+	check("door: name match is case-insensitive", named[1].name == "big_DOOR", named[1])
+	check("door: default state is closed", named[1].state == "closed", named[1])
+	check("door: gate counts too", named[2].name == "Gate_North" and named[2].state == "closed", named[2])
+	var only_doors: Array = Rt.doors_from_named([{"name": "Gate_North", "cell": Vector2i(5, 1)}], {"keywords": ["door"]})
+	check("door: keyword list is overridable", only_doors.size() == 0, only_doors)
+
+	# wired into the generation gate
+	var cr: Dictionary = Rt.check_or_regenerate(droom, {"start": Vector2i(1, 1), "doors": [{"name": "Door_A", "cell": Vector2i(3, 2), "state": "closed"}]})
+	check("door: exposed on check_or_regenerate", cr.has("doors") and cr.doors.pass == true, cr.keys())
+	var cr_bad: Dictionary = Rt.check_or_regenerate(sealed_room, {"start": Vector2i(1, 1), "doors": [{"name": "Door_C", "cell": Vector2i(3, 1), "state": "closed"}]})
+	check("door: a walled-off door forces regenerate", cr_bad.pass == false and cr_bad.action == "regenerate", cr_bad.reasons)
+
 	print("\n" + str(passed) + " passed, " + str(fail) + " failed")
 	quit(1 if fail > 0 else 0)

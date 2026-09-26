@@ -59,6 +59,52 @@ else:
 `res.reasons` is a short, loggable list, so a generator can say *why* it threw a
 room away instead of silently rerolling.
 
+## Doors (reachable, or needing the room cleared)
+
+A door is a cell with a name and a state. The rule is deliberately simple: if the
+object's name contains **`door`** or **`gate`** (any case, `Door_A`, `big_door`,
+`DOOR_2`, `Gate_North`), it is a door. State decides whether it is a way through
+right now:
+
+| state | meaning |
+|---|---|
+| `open` | passable |
+| `closed` | blocked, a push opens it |
+| `locked` | blocked until a key / condition (reported, not a break by itself) |
+
+The pass answers the two questions a designer actually asks: *can I reach the door
+from spawn?* and *does reaching it mean clearing the room first?*
+
+- `reachable` - stand on it (open) or beside it (closed/locked) with the floor
+  exactly as rolled.
+- `needsClearing` - not reachable now, but reachable if every destructible
+  obstacle were removed. Warned by default; set `strictClearPath: true` to fail it.
+- `walledOff` - not reachable even then: the door can never be used. Always fails.
+
+```gdscript
+# doors can be a list of {name, cell, state}, a {Vector2i: state} map, or raw cells
+var doors := MazeRuntime.doors_from_named(room.get_children())  # name rule only
+# the keyword list is overridable: doors_from_named(nodes, {"keywords": ["gate"]})
+
+var res := MazeRuntime.check_or_regenerate(rows, {
+    "start": Vector2i(1, 1),
+    "obstacles": [Vector2i(2, 1)],           # destructible, clearable
+    "doors": [{"name": "Door_A", "cell": Vector2i(4, 1), "state": "closed"}],
+    "strictClearPath": false,                 # true = needing to clear counts as fail
+})
+if not res.pass:
+    regenerate(res.reasons)   # e.g. ["door 'Door_A' at (4, 1) is walled off"]
+```
+
+Or call it on its own, when you already have a floor you like and only want the
+door verdict:
+
+```gdscript
+var d := MazeRuntime.check_doors(rows, doors, {"start": Vector2i(1, 1), "obstacles": obstacles})
+# d.doors -> per-door {reachable, needsClearing, walledOff, note}
+# d.pass, d.walledOff, d.needingClearing, d.reasons, d.warnings
+```
+
 ## License
 
 MIT. See LICENSE.

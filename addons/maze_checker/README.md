@@ -1,8 +1,8 @@
 # Maze Checker (Godot editor plugin)
 
-Flags unreachable floor, sealed pockets, dead ends and stuck pickups in a
-TileMapLayer level before you ever hit Play. Output goes to the editor's
-**Output** panel; anything broken also raises a warning.
+Flags unreachable floor, sealed pockets, dead ends, stuck pickups and
+unreachable doors in a TileMapLayer level before you ever hit Play. Output goes
+to the editor's **Output** panel; anything broken also raises a warning.
 
 Author: Alice · Godot 4.x (tested on 4.5.1 and 4.7.2)
 
@@ -37,9 +37,29 @@ if res.pass: build(res.report) else: regenerate(res.reasons)
 
 Pure logic, no editor dependency: safe to call from a running game.
 
+### Doors
+
+A door is a cell whose **name contains `door` or `gate`** (any case). State is
+`open` (passable), `closed` (blocked, a push opens it) or `locked` (blocked until
+a key; reported, not a break by itself). Pass `doors` to `check_or_regenerate`,
+or call `check_doors` on its own:
+
+```gdscript
+var doors := MazeRuntime.doors_from_named(room.get_children())  # name rule only
+# override the keywords: MazeRuntime.doors_from_named(nodes, {"keywords": ["gate"]})
+var d := MazeRuntime.check_doors(rows, doors, {"start": Vector2i(1, 1), "obstacles": obstacles})
+# d.doors -> per-door {reachable, needsClearing, walledOff, note}
+# d.pass, d.walledOff, d.needingClearing, d.reasons, d.warnings
+```
+
+- `reachable` - stand on it (open) or beside it (closed/locked) as rolled.
+- `needsClearing` - only reachable after removing destructible obstacles.
+  Warned by default; `strictClearPath: true` makes it a failure.
+- `walledOff` - unreachable even then; always fails.
+
 ## Tests
 
-80 headless checks across `test_core.gd`, `test_graph.gd`, `test_adapter.gd`
+99 headless checks across `test_core.gd`, `test_graph.gd`, `test_adapter.gd`
 and `test_runtime.gd`, green on Godot 4.5.1 and 4.7.2:
 `godot --headless --script res://addons/maze_checker/test_runtime.gd`
 
@@ -86,12 +106,16 @@ reads the mask from the main layer and treats those connections as blocked.
   explicit link list (a "geomap": arbitrary nodes and connections).
 - `maze_core.gd` - the original ASCII-grid core, kept for the two classic checks.
 - `tilemap_adapter.gd` - TileMapLayer cells -> text / edge-mask ids.
-- `test_core.gd`, `test_adapter.gd`, `test_graph.gd` - headless tests
-  (`godot --headless --path . --script res://addons/maze_checker/test_graph.gd`).
+- `test_core.gd`, `test_adapter.gd`, `test_graph.gd`, `test_runtime.gd` - headless
+  tests (`godot --headless --path . --script res://addons/maze_checker/test_graph.gd`).
 
 ## Status / roadmap
 
 - v0.1.0: square grid, walls-as-tiles and floor-as-tiles.
 - v0.2.0: graph core; hex grids; destructible obstacles with a "best removal"
   hint; edge walls via `edge_mask`.
-- Next: multi-level runs, and arbitrary link graphs surfaced in the editor.
+- v0.3.0: runtime API for procedural generators (`check_or_regenerate` + reasons).
+- v0.4.0: door pass - name rule + open/closed/locked state, reachability from
+  spawn, `needsClearing` and `walledOff` verdicts.
+- Next: surface the door pass in the editor menu, multi-level runs, and arbitrary
+  link graphs surfaced in the editor.
