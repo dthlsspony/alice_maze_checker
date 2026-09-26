@@ -32,6 +32,33 @@ reports what a player can never reach.
 | Check level: + obstacles & edge walls | Square grid, plus destructible obstacles and walls on tile edges. |
 | Check level: hex grid | Treats the painted cells as a hex grid (odd-r offset, 6 neighbours). |
 
+## Use it from a generator (runtime)
+
+The editor plugin reads a painted TileMapLayer. If you *generate* floors at run
+time, there is no tilemap yet, so `MazeRuntime` takes your cells directly and
+answers the only question a generation loop asks: **accept this floor, or roll
+another one?** It has no editor or engine dependencies, so it is safe to call
+from a running game, a headless test, or a tool.
+
+```gdscript
+const MazeRuntime = preload("res://addons/maze_checker/maze_runtime.gd")
+
+# rows: Array of rows, 1 = wall, 0 = floor (PackedByteArray + width/height also works)
+var res := MazeRuntime.check_or_regenerate(rows, {
+    "start": Vector2i(2, 2),       # optional: anchor the report on the spawn
+    "minWalkableRatio": 0.25,      # refuse a floor that is mostly wall
+    "maxDeadEndRatio": 0.5,        # refuse a floor that is mostly dead ends
+    "allowEdgeOpenings": true,     # set false if floor must not touch the border
+})
+if res.pass:
+    build(res.report)              # res.report has unreachable / deadEnds / regions ...
+else:
+    regenerate(res.reasons)        # e.g. ["3 unreachable floor cell(s)", "2 separate regions"]
+```
+
+`res.reasons` is a short, loggable list, so a generator can say *why* it threw a
+room away instead of silently rerolling.
+
 ## License
 
 MIT. See LICENSE.

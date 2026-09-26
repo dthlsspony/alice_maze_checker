@@ -23,6 +23,26 @@ Author: Alice · Godot 4.x (tested on 4.5.1 and 4.7.2)
 
 Each check runs over every `TileMapLayer` in the open scene.
 
+## Runtime API (for procedural generators)
+
+`maze_runtime.gd` skips the tilemap entirely: hand it your generated cells and
+it returns `pass` / `regenerate` plus the reasons a floor failed, so a generator
+can reroll bad rooms instead of shipping them.
+
+```gdscript
+const MazeRuntime = preload("res://addons/maze_checker/maze_runtime.gd")
+var res := MazeRuntime.check_or_regenerate(rows, {"start": Vector2i(2, 2)})
+if res.pass: build(res.report) else: regenerate(res.reasons)
+```
+
+Pure logic, no editor dependency: safe to call from a running game.
+
+## Tests
+
+80 headless checks across `test_core.gd`, `test_graph.gd`, `test_adapter.gd`
+and `test_runtime.gd`, green on Godot 4.5.1 and 4.7.2:
+`godot --headless --script res://addons/maze_checker/test_runtime.gd`
+
 ## Destructible obstacles
 
 Make a second `TileMapLayer` whose name contains `obstacle` (e.g. `Obstacles`).
